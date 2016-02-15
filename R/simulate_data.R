@@ -67,7 +67,8 @@ simulate_AB <- function(m = 6, n = 12, k = 1,
     
   #get m x (2k+1) matrix indicating baseline/treatment introduction times.
   introduction_time_mat <- t(sapply(N_i, FUN = function(x){floor(seq(1, x, length.out = (2*k) + 1))})) #indicate (start,end] of treatment/baseline sub-phases.
-  
+  zero_start_time <- introduction_time_mat; zero_start_time[, 1] <- rep(0, nrow(zero_start_time)) 
+
   #get m x k matrix indicating ends of phase, i.e. k
   phase_matrix <- introduction_time_mat[,2:ncol(introduction_time_mat)]
   phase_matrix <- as.matrix(phase_matrix[,seq(2,ncol(phase_matrix), by = 2)], ncol = k)
@@ -75,14 +76,27 @@ simulate_AB <- function(m = 6, n = 12, k = 1,
   #check dimensions...
   if(!((nrow(introduction_time_mat)==m) & (ncol(introduction_time_mat) == 2*k + 1))) stop("Dimensions of baseline/treatment intro time matrix are incorrect.")
   
-  if(is.null(betas)){   #we want m*(2k) mean beta parameters and m*2k slope beta parameters
-    betas <- matrix(NA, nrow = m, ncol = 4*k) #there are 4mk parameters to fit...
+  # if(is.null(betas)){   #we want m*(2k) mean beta parameters and m*2k slope beta parameters
+  #   betas <- matrix(NA, nrow = m, ncol = 4*k) #there are 4mk parameters to fit...
   
+  #   for(ii in 1:m){
+  #     betas[ii, seq(1, ncol(betas), by = 2*k)] <- rpois(1, intercept_lambda) #baseline intercept ~10
+  #     betas[ii, seq(2, ncol(betas), by = 2*k)] <- rnorm(1, 5, 0.001) #baseline slope ~0.5
+  #     betas[ii, seq(3, ncol(betas), by = 2*k)] <- rpois(1, intercept_lambda) #treatment intercept ~10
+  #     betas[ii, seq(4, ncol(betas), by = 2*k)] <- rnorm(1, -10, 0.001) #treatment slope ~-1.5
+  #   }
+  # }
+  if(is.null(betas)){
+    betas <- matrix(NA, nrow = m, ncol = 4*k) #For simulation, assume that slope params are shared across baseline sub-phases, and same for treatment sub-phases
+                                              #although intercept parameters will need to be adjusted for time so that baseline/treatment sub-phases look consistent.
+    colnames(betas) <- rep(c("intercept", "slope"), times = 2*k)
+    baseline_intercept <- 40; treatment_intercept <- 10
+    baseline_slope <- 5; treatment_slope <- -10                                        
     for(ii in 1:m){
-      betas[ii, seq(1, ncol(betas), by = 2*k)] <- rpois(1, intercept_lambda) #baseline intercept ~10
-      betas[ii, seq(2, ncol(betas), by = 2*k)] <- rnorm(1, 5, 0.001) #baseline slope ~0.5
-      betas[ii, seq(3, ncol(betas), by = 2*k)] <- rpois(1, intercept_lambda) #treatment intercept ~10
-      betas[ii, seq(4, ncol(betas), by = 2*k)] <- rnorm(1, -10, 0.001) #treatment slope ~-1.5
+      betas[ii, seq(1, ncol(betas), by = 2*k)] <- (baseline_intercept+baseline_slope)-(zero_start_time[ii,seq(1,2*k, by = 2)]+1)*baseline_slope #time offset to make baseline sub-phases look consistent.
+      betas[ii, seq(2, ncol(betas), by = 2*k)] <- baseline_slope 
+      betas[ii, seq(3, ncol(betas), by = 2*k)] <- (treatment_intercept+treatment_slope)-(zero_start_time[ii,seq(1,2*k, by = 2)]+1)*treatment_slope
+      betas[ii, seq(4, ncol(betas), by = 2*k)] <- treatment_slope
     }
   }
 
@@ -129,16 +143,22 @@ simulate_AB <- function(m = 6, n = 12, k = 1,
       }
     }
     
-    #accrue time spent relative to each sub-phase...
-    tmp <- introduction_time_mat; tmp[, 1] <- rep(0, nrow(tmp))
-    normalized_time <- c(unlist(sapply(diff(tmp[case,]), FUN = function(x){1:x})))
+    #accrue time spent relative to each sub-phase to avoid having to offset intercept coefficients... Should I do this?
+    # normalized_time <- c(unlist(sapply(diff(zero_start_time[case,]), FUN = function(x){1:x})))
     
     #add in intercept based on sub-phase
-    intercept_vec <- ifelse(simulation_df[simulation_df$case==case,"treatment"] == "BASELINE", betas[case,1],betas[case,3])
-    
+    # intercept_vec <- ifelse(simulation_df[simulation_df$case==case,"treatment"] == "BASELINE", betas[case,1],betas[case,3])
+    intercept_vec <- NULL
+    agg_time_in_subphase <- aggregate(simulation_df[simulation_df$case==case,"outcome"], by = list(simulation_df[simulation_df$case==case,"treatment"], simulation_df[simulation_df$case==case,"phase"]), function(x) length(x))$x
+    beta_col_selector <- seq(1, 4*k, by = 2)
+    for(jj in 1:(2*k)){
+        intercept_vec <- as.numeric(c(intercept_vec, rep(betas[case, beta_col_selector[jj]],agg_time_in_subphase[jj])))
+    }
+
     #add in time trend based on sub-phase
-    slope_vec <- ifelse(simulation_df[simulation_df$case==case,"treatment"] == "BASELINE", betas[case,2],betas[case,4])
-    time_trend <- slope_vec * normalized_time
+    slope_vec <- as.numeric(ifelse(simulation_df[simulation_df$case==case,"treatment"] == "BASELINE", betas[case,seq(2, 4*k, by = 4)], betas[case,seq(4, 4*k, by = 4)]))
+    # time_trend <- slope_vec * normalized_time
+    time_trend <- slope_vec*simulation_df[simulation_df$case==case,"time"]
     
     #First-order auto-regressive process with time trend: 
     # x1 = arima.sim(list(ar=.4), n=100) + 1:100 #-1<ar<1 controls how fast autocorrelation dies
@@ -149,7 +169,7 @@ simulate_AB <- function(m = 6, n = 12, k = 1,
   simulation_df$phase <- as.factor(simulation_df$phase)
   simulation_df$case <- as.factor(simulation_df$case)
 
-  return(list(df = simulation_df, eij = eij))
+  return(list(df = simulation_df, eij = eij, betas = betas, N_i = N_i))
 }
 
 
@@ -216,7 +236,7 @@ visualize_case_acf <- function(df, case = 1){
 ##----------------------------------------------------------------
 ## TEST SIMULATION FUNCS
 ##----------------------------------------------------------------
-# sim <- simulate_AB(m = 6, n = 12, k = 1,
+# sim <- simulate_AB(m = 6, n = 20, k = 2,
 #                    phi = 0.2,
 #                    min_Ni = NULL,
 #                    betas = NULL,
