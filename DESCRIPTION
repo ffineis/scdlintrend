@@ -1,0 +1,16 @@
+Package: scdlintrend
+Type: Package
+Title: Effect Size Estimation in SCD Studies with Linear Trends
+Version: 1.0
+Date: 2016-02-14
+Author: Frank Fineis
+Maintainer: Frank Fineis <frank.fineis@gmail.com>
+Description: Estimate effect sizes in single case design studies, also called $(AB)^{k}$ studies, where baseline and treatment phases have linear trends.
+License: GPL-3
+Imports:
+    data.table
+Depends:
+    data.table,
+    R (>= 3.0.1)
+VignetteBuilder: knitr
+RoxygenNote: 5.0.1
