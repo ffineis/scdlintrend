@@ -68,7 +68,7 @@ c_vector <- function(trt_vec, k, x_is = NULL, treatment_name = "TREATMENT"){
 
 	x_i_ctr <- 1
 
-	c_vec[1] <- -1; c_vec[2] <- -x_is[x_i_ctr] #not sure about x_is indexing? Possible notation issue in paper.
+	c_vec[1] <- -1; c_vec[2] <- -x_is[x_i_ctr] #not sure about x_is indexing? Can i's get indexed along with j in the paper?
 
 	for (j in seq(1, (2*k-2))){
 		c_vec[(2*j + 1)] <- 2*((-1)**(j+1))
@@ -171,7 +171,7 @@ AR1_matrix <- function(phi, rho, times) (1-rho)*(phi^as.matrix(dist(times))) + r
 
 beta_vector <- function(X, y, Sigma){
 	precision <- solve(Sigma)
-	return(solve(t(X)%*%precision%*%X)%*%t(X)%*%precision%*%y) #this beta vector is ordered incorrectly, should be [intercept_1, slope_1, ...]
+	return(solve(t(X)%*%precision%*%X)%*%t(X)%*%precision%*%y) #this beta vector might be ordered improperly, should be [intercept_1, slope_1, ...]
 }
 
 
@@ -214,7 +214,7 @@ var_i <- function(X, y, Sigma, k){
 ##----------------------------------------------------------------------------------------------------------------
 
 T_bar <- function(beta, c_i, k){
-	t(c_i)%*%beta/(2*k - 1) #note, paper is missing this 2*k - 1 denominator factor...
+	t(c_i)%*%beta/(2*k - 1) #note, paper could be missing 2*k - 1 denominator factor
 }
 
 
