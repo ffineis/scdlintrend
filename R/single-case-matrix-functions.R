@@ -37,7 +37,7 @@ gather_midpoints <- function(trt_vec, k, treatment_name = "TREATMENT"){
 
 
 ##----------------------------------------------------------------------------------------------------------------
-## Create $\vec{c}$ vector required for calculating $\bar{T} = B\vec{y}$, the vector of treatment effect estimates
+## Create c vector required for calculating T = By, the vector of treatment effect estimates
 ##----------------------------------------------------------------------------------------------------------------
 
 #' @title c_vector
