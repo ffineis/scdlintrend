@@ -31,7 +31,7 @@ gather_Nis <- function(m, max_Ni = 12, min_Ni = 6){
 ## Generate AB^k data with variable number of observations per case
 ##----------------------------------------------------------------
 
-#' @title simulate_AB
+#' @title simulate_ABk
 #' 
 #' @description Simulates data from an $AB^{k}$ test with linear trends in baseline and treatment sub-phases.
 #' 
@@ -49,9 +49,9 @@ gather_Nis <- function(m, max_Ni = 12, min_Ni = 6){
 #' @return data.frame with case, time, treatment, phase, and outcome columns
 #' 
 #' @examples
-#' simulate_AB(m = 6, n = 12, k = 2, phi = 0.15, intercept_lambda = 15)
+#' simulate_ABk(m = 6, n = 12, k = 2, phi = 0.15, intercept_lambda = 15)
 
-simulate_AB <- function(m = 6, n = 12, k = 1,
+simulate_ABk <- function(m = 6, n = 12, k = 1,
                         phi = 0.2,
                         min_Ni = NULL,
                         betas = NULL,
