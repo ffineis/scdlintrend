@@ -37,7 +37,7 @@ gather_midpoints <- function(trt_vec, k, treatment_name = "TREATMENT"){
 
 
 ##----------------------------------------------------------------------------------------------------------------
-## Create c vector required for calculating T = By, the vector of treatment effect estimates
+## Create $\vec{c}$ vector required for calculating $\bar{T} = B\vec{y}$, the vector of treatment effect estimates
 ##----------------------------------------------------------------------------------------------------------------
 
 #' @title c_vector
@@ -209,8 +209,13 @@ var_i <- function(X, y, Sigma, k){
 }
 
 
+##----------------------------------------------------------------------------------------------------------------
+## Obtain average treatment effect of case i
+##----------------------------------------------------------------------------------------------------------------
 
-
+T_bar <- function(beta, c_i, k){
+	t(c_i)%*%beta/(2*k - 1) #note, paper is missing this 2*k - 1 denominator factor...
+}
 
 
 
@@ -239,13 +244,16 @@ var_i <- function(X, y, Sigma, k){
 # print("Actual linear coefficients:")
 # print(betas[1, ])
 
-# beta_vec_reorder <- c(beta_vec[seq(1, 4*k, by = 2)], beta_vec[seq(2, 4*k, by = 2)])
+# intercepts <- beta_vec[1:(2*k)]; slopes <- beta_vec[((2*k)+1):(4*k)]
+# beta_vec_reorder <- vector(mode = "numeric", length = 4*k)
+# for(i in seq(1, 2*k)){
+# 	beta_vec_reorder[(2*i)-1] <- intercepts[i]
+# 	beta_vec_reorder[2*i] <- slopes[i]
+# }
 
-# T_bar_incorrect <- t(c_vec)%*%beta_vec/(2*k - 1) #note, paper is missing this 2*k - 1 denominator factor...
-# T_bar_correct <- t(c_vec)%*%beta_vec_reorder/(2*k - 1)
+# T_bar_incorrect <- T_bar(c_vec, beta_vec, k)
+# T_bar_correct <- T_bar(c_vec, beta_vec_reorder, k)
+# print(sprintf("Average treatment effect: %.2f", T_bar_correct))
 
 # sigma_calcs <- var_i(X_1, y_1, sigma_1, k = 2)
 # print(sprintf("Estimated variance about the regression line: %.2f", sigma_calcs$sigma_sq_i))
-
-
-
