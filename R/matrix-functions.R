@@ -94,10 +94,33 @@ c_vector <- function(trt_vec, k, treatment_name = "TREATMENT"){
 #'
 #' @export 
 #' 
-#' @return a (2k, N_i)-dimensional design matrix
+#' @return a (N_i, 4k)-dimension design matrix
 #' 
 #' @examples
 #' X_1 <- design_matrix(sim_df[sim_df$case == 1, "treatment"], k = 2)
+design_matrix_ABk <- function(trt_vec, k, treatment_name = "TREATMENT"){
+	N_i <- length(trt_vec)
+	time <- seq(N_i) #index time beginning at t = 1.
+	trt_numeric <- ifelse(trt_vec == treatment_name, 1, 0)
+
+	subphase_ind <- vector(length = N_i, mode = "numeric")
+	subphase_ind[1] <- 1
+	for(i in 2:N_i) subphase_ind[i] <- ifelse(trt_numeric[i-1] == trt_numeric[i], subphase_ind[i-1], subphase_ind[i-1]+1)
+
+	dummy_matrix <- matrix(NA, nrow = (4*k), ncol = N_i)
+
+	for(ii in 1:(2*k)){
+		Dii <- ifelse(subphase_ind==ii, 1, 0)
+		dummy_matrix[ii, ] <- Dii
+		dummy_matrix[(ii + 2*k),] <- Dii*time  
+	}
+
+	return(t(dummy_matrix))
+}
+
+
+
+
 
 
 
