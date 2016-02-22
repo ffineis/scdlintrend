@@ -41,22 +41,21 @@ gather_Nis <- function(m, max_Ni = 12, min_Ni = 6){
 #' @param phi autocorrelation parameter 
 #' @param min_Ni minimum allowable number of time observations in a case.
 #' @param betas (m, 4k)-dimensional matrix containing ($\beta_{0}$, $\beta_{1}$) parameters per every sub-phase. If NULL, this has defaults.
-#' @param intercept_lambda poisson distribution parameter for picking baseline $\beta$ intercept.
-#' @param sigmas vector of inter-case residual variances
+#' @param sigma amount of within-case residual variance
 #'   
 #' @export 
 #' 
 #' @return data.frame with case, time, treatment, phase, and outcome columns
 #' 
 #' @examples
-#' simulate_ABk(m = 6, n = 12, k = 2, phi = 0.15, intercept_lambda = 15)
+#' simulate_ABk(m = 6, n = 12, k = 2, phi = 0.15, tau = 1)
 
 simulate_ABk <- function(m = 6, n = 12, k = 1,
                         phi = 0.2,
+                        tau = 1,
                         min_Ni = NULL,
                         betas = NULL,
-                        intercept_lambda = 10,
-                        sigmas = NULL){
+                        sigma = 1){
   
   if(is.null(min_Ni)) min_Ni <- ceiling(n/2)
   
@@ -64,6 +63,7 @@ simulate_ABk <- function(m = 6, n = 12, k = 1,
   if((2*k - 1) >= min_Ni) stop("Too many phases given smallest number of case observations, min_Ni.")
   
   N_i <- gather_Nis(m, n, min_Ni) #gather number of obs in each case
+  tau_i <- rnorm(n = m, mean = 0, sd = tau) #individual case effects
     
   #get m x (2k+1) matrix indicating baseline/treatment introduction times.
   introduction_time_mat <- t(sapply(N_i, FUN = function(x){floor(seq(1, x, length.out = (2*k) + 1))})) #indicate (start,end] of treatment/baseline sub-phases.
@@ -76,16 +76,6 @@ simulate_ABk <- function(m = 6, n = 12, k = 1,
   #check dimensions...
   if(!((nrow(introduction_time_mat)==m) & (ncol(introduction_time_mat) == 2*k + 1))) stop("Dimensions of baseline/treatment intro time matrix are incorrect.")
   
-  # if(is.null(betas)){   #we want m*(2k) mean beta parameters and m*2k slope beta parameters
-  #   betas <- matrix(NA, nrow = m, ncol = 4*k) #there are 4mk parameters to fit...
-  
-  #   for(ii in 1:m){
-  #     betas[ii, seq(1, ncol(betas), by = 2*k)] <- rpois(1, intercept_lambda) #baseline intercept ~10
-  #     betas[ii, seq(2, ncol(betas), by = 2*k)] <- rnorm(1, 5, 0.001) #baseline slope ~0.5
-  #     betas[ii, seq(3, ncol(betas), by = 2*k)] <- rpois(1, intercept_lambda) #treatment intercept ~10
-  #     betas[ii, seq(4, ncol(betas), by = 2*k)] <- rnorm(1, -10, 0.001) #treatment slope ~-1.5
-  #   }
-  # }
   if(is.null(betas)){
     betas <- matrix(NA, nrow = m, ncol = 4*k) #For simulation, assume that slope params are shared across baseline sub-phases, and same for treatment sub-phases
                                               #although intercept parameters will need to be adjusted for time so that baseline/treatment sub-phases look consistent.
@@ -100,7 +90,7 @@ simulate_ABk <- function(m = 6, n = 12, k = 1,
     }
   }
 
-  if(is.null(sigmas) | length(sigmas) != m) sigmas <- rep(1, m) #gather inter-case residual variances
+  sigmas <- rep(sigma, m) #gather inter-case residual variances
   
   #check to see beta matrix is completely filled out...
   if(any(is.na(betas))) stop("Beta matrix was not filled appropriately, NA values remain.")
@@ -163,13 +153,13 @@ simulate_ABk <- function(m = 6, n = 12, k = 1,
     #First-order auto-regressive process with time trend: 
     # x1 = arima.sim(list(ar=.4), n=100) + 1:100 #-1<ar<1 controls how fast autocorrelation dies
     eij[[case]] <- arima.sim(list(ar=phi), n=N_i[case], sd = sigmas[case])
-    simulation_df$outcome[start:end] <- eij[[case]] + time_trend + intercept_vec
+    simulation_df$outcome[start:end] <- as.numeric(eij[[case]] + time_trend + intercept_vec + tau_i[m])
   }
 
   simulation_df$phase <- as.factor(simulation_df$phase)
   simulation_df$case <- as.factor(simulation_df$case)
 
-  return(list(df = simulation_df, eij = eij, betas = betas, N_i = N_i))
+  return(list(df = simulation_df, eij = eij, betas = betas, N_i = N_i, tau_i = tau_i))
 }
 
 
@@ -189,7 +179,7 @@ simulate_ABk <- function(m = 6, n = 12, k = 1,
 #' @return NULL
 #' 
 #' @examples
-#' sim <- simulate_AB(m = 6, n = 12, k = 2, phi = 0.15, intercept_lambda = 15)
+#' sim <- simulate_AB(m = 6, n = 12, k = 2, phi = 0.15, tau = 1)
 #' visualize_sim(sim$df)
 
 visualize_sim <- function(df, treatment_name = "TREATMENT"){
@@ -224,7 +214,7 @@ visualize_sim <- function(df, treatment_name = "TREATMENT"){
 #' @return NULL
 #' 
 #' @examples
-#' sim <- simulate_AB(m = 6, n = 12, k = 2, phi = 0.15, intercept_lambda = 15)
+#' sim <- simulate_AB(m = 6, n = 12, k = 2, phi = 0.15, tau = 1)
 #' visualize_case_acf(sim$df)
 
 visualize_case_acf <- function(df, case = 1){
@@ -238,9 +228,9 @@ visualize_case_acf <- function(df, case = 1){
 ##----------------------------------------------------------------
 # sim <- simulate_AB(m = 6, n = 20, k = 2,
 #                    phi = 0.2,
+#                    tau = 1,
 #                    min_Ni = NULL,
-#                    betas = NULL,
-#                    intercept_lambda = 10)
+#                    betas = NULL)
 # par.original <- par()
 # visualize_sim(sim$df)
 # par(par.original)
