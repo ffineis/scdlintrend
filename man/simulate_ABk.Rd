@@ -4,8 +4,8 @@
 \alias{simulate_ABk}
 \title{simulate_ABk}
 \usage{
-simulate_ABk(m = 6, n = 12, k = 1, phi = 0.2, min_Ni = NULL,
-  betas = NULL, intercept_lambda = 10, sigmas = NULL)
+simulate_ABk(m = 6, n = 12, k = 1, phi = 0.2, tau = 1,
+  min_Ni = NULL, betas = NULL, sigma = 1)
 }
 \arguments{
 \item{m}{number of cases}
@@ -20,9 +20,7 @@ simulate_ABk(m = 6, n = 12, k = 1, phi = 0.2, min_Ni = NULL,
 
 \item{betas}{(m, 4k)-dimensional matrix containing ($\beta_{0}$, $\beta_{1}$) parameters per every sub-phase. If NULL, this has defaults.}
 
-\item{intercept_lambda}{poisson distribution parameter for picking baseline $\beta$ intercept.}
-
-\item{sigmas}{vector of inter-case residual variances}
+\item{sigma}{amount of within-case residual variance}
 }
 \value{
 data.frame with case, time, treatment, phase, and outcome columns
@@ -31,6 +29,6 @@ data.frame with case, time, treatment, phase, and outcome columns
 Simulates data from an $AB^{k}$ test with linear trends in baseline and treatment sub-phases.
 }
 \examples{
-simulate_ABk(m = 6, n = 12, k = 2, phi = 0.15, intercept_lambda = 15)
+simulate_ABk(m = 6, n = 12, k = 2, phi = 0.15, tau = 1)
 }
 

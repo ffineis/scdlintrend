@@ -15,7 +15,7 @@ visualize_case_acf(df, case = 1)
 plot ACF of a particular AB^k test case
 }
 \examples{
-sim <- simulate_AB(m = 6, n = 12, k = 2, phi = 0.15, intercept_lambda = 15)
+sim <- simulate_AB(m = 6, n = 12, k = 2, phi = 0.15, tau = 1)
 visualize_case_acf(sim$df)
 }
 

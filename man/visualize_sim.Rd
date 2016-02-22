@@ -15,7 +15,7 @@ visualize_sim(df, treatment_name = "TREATMENT")
 plot simulated AB^k data with linear trends.
 }
 \examples{
-sim <- simulate_AB(m = 6, n = 12, k = 2, phi = 0.15, intercept_lambda = 15)
+sim <- simulate_AB(m = 6, n = 12, k = 2, phi = 0.15, tau = 1)
 visualize_sim(sim$df)
 }
 

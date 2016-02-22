@@ -4,12 +4,17 @@
 ## (Helper fun) Generate number of time observations (N_i, or N_a dep. on notation) per case
 ##----------------------------------------------------------------
 
-# Get N_i counts: number of observations for each of the m cases.
-# m is number of cases
-# max_Ni is maximum number of observations across all cases
-# min_Ni is minimum number of observations across all cases
-#
-# returns vector of length m of lengths of observational study between min_Ni and max_Ni
+#' @title gather_Nis
+#'
+#' @description generate a vector of number of observations for each of the m cases.
+#'
+#' @param m number of cases
+#' @param max_Ni maximum number of observations across all cases
+#' @param min_Ni minimum number of observations across all cases
+#'
+#' @export 
+#'
+#' @return vector of length m of lengths of observational study between min_Ni and max_Ni
 gather_Nis <- function(m, max_Ni = 12, min_Ni = 6){
   
   if(min_Ni > max_Ni) stop("Cannot have min_Ni greater than max_Ni")
@@ -133,11 +138,7 @@ simulate_ABk <- function(m = 6, n = 12, k = 1,
       }
     }
     
-    #accrue time spent relative to each sub-phase to avoid having to offset intercept coefficients... Should I do this?
-    # normalized_time <- c(unlist(sapply(diff(zero_start_time[case,]), FUN = function(x){1:x})))
-    
     #add in intercept based on sub-phase
-    # intercept_vec <- ifelse(simulation_df[simulation_df$case==case,"treatment"] == "BASELINE", betas[case,1],betas[case,3])
     intercept_vec <- NULL
     agg_time_in_subphase <- aggregate(simulation_df[simulation_df$case==case,"outcome"], by = list(simulation_df[simulation_df$case==case,"treatment"], simulation_df[simulation_df$case==case,"phase"]), function(x) length(x))$x
     beta_col_selector <- seq(1, 4*k, by = 2)

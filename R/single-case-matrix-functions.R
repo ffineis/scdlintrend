@@ -4,10 +4,17 @@
 ## Calculate x_i's, 1 <= x_i <= 2k-1, the mid points of each sub-phase after the first baseline
 ##-----------------------------------------------------------------------------------------------
 
-#helper function gather_midpoints
-#trt_vec is character vector indicating sub-phase of a particular case, e.g.
-#		c("BASELINE", "BASELINE", "TREATMENT", "TREATMENT")
-#k is number of complete sub-phase cycles equivalent to number of instances treatment sub-phase kicked in
+#' @title gather_midpoints
+#'
+#' @description from vector of time observation points, determine midpoint of each baseline or treatment subphase
+#' @param trt_vec character vector indicating sub-phase of a particular case, e.g.
+#		        c("BASELINE", "BASELINE", "TREATMENT", "TREATMENT")
+#' @param k number of complete baseline, treatment subphases
+#' @param treatment_name string contained in simulated data's 'treatment' column
+#'
+#' @export
+#' 
+#' @return vector of time midpoints of subphases
 
 gather_midpoints <- function(trt_vec, k, treatment_name = "TREATMENT"){
 	time <- seq(length(trt_vec))
@@ -146,7 +153,7 @@ AR1_matrix <- function(phi, rho, times) (1-rho)*(phi^as.matrix(dist(times))) + r
 
 
 ##----------------------------------------------------------------------------------------------------------------
-## Obtain $\beta_{i}$ vector for a given case
+## Obtain beta vector for a given case
 ##----------------------------------------------------------------------------------------------------------------
 
 #' @title beta_vector
@@ -212,6 +219,18 @@ var_i <- function(X, y, Sigma, k){
 ##----------------------------------------------------------------------------------------------------------------
 ## Obtain average treatment effect of case i
 ##----------------------------------------------------------------------------------------------------------------
+
+#' @title T_bar
+#' 
+#' @description calculate the mean treatment effect for an individual case
+#' 
+#' @param beta the (4k, 1) vector of coefficients ordered [intercept1, intercept2,...,interceptk, slope1, slope2,...,slopek]
+#' @param c_i the (4k, 1) vector of multipliers and midpoints for counting up beta coefficients
+#' @param k number of complete sub-phase cycles, as in (AB)^k
+#'
+#' @export 
+#' 
+#' @return the average T estimate for one case
 
 T_bar <- function(beta, c_i, k){
 	t(c_i)%*%beta/(2*k - 1) #note, paper could be missing 2*k - 1 denominator factor
