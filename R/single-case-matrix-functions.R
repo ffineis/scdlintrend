@@ -71,6 +71,8 @@ c_vector <- function(trt_vec, k, x_is = NULL, treatment_name = "TREATMENT"){
 
 	if(is.null(x_is)){
 		x_is <- gather_midpoints(trt_vec, k, treatment_name) #midpoints beginning with first treatment sub-phase
+	} else{
+		if (length(x_is) != 2*k) stop("x_is needs to have 4k values.")
 	}
 
 	x_i_ctr <- 1
