@@ -20,6 +20,7 @@ treatment_effect_distribution <- function(sigma, tau, B, Sigma){
 
 
 ##----------------------------------------------------------------------------------------------------------------
+## DEPRECATED...
 ## Simulate multiple studies where tau and sigma are known, obtain treatment effects.
 ##----------------------------------------------------------------------------------------------------------------
 
@@ -39,7 +40,7 @@ treatment_effect_distribution <- function(sigma, tau, B, Sigma){
 #' 
 #' @return (N, m) matrix of estimated treatment effects
 
-simulate_treatment_effects <- function(N = 100, m = 10, n = 30, k = 2, phi = 0.2, tau = 1, sigma = 1,
+simulate_treatment_effects <- function(N = 1000, m = 10, n = 30, k = 2, phi = 0.2, tau = 1, sigma = 1,
                                         plot_treatment_effects = FALSE){
   
   T_stor <- matrix(NA, nrow = N, ncol = m) #(simulations x cases) matrix full of ESTIMATED treatment effects
@@ -119,63 +120,13 @@ simulate_treatment_effects <- function(N = 100, m = 10, n = 30, k = 2, phi = 0.2
 
 
 ##----------------------------------------------------------------------------------------------------------------
-## Given an analytic value of the effect size (delta_{R}), known sigma and tau values, N_i,
-## find a Beta vector that yields about this effect size. Assumes that the slope coefficients are
-## constant across subphase type.
-##----------------------------------------------------------------------------------------------------------------
-
-#' @title beta_given_delta
-#' 
-#' @description derive a beta vector for an (AB)^k SCD study with desired treatment effect equal to delta. Uses
-#'              gradient descent for convergence
-#' 
-#' @param delta the standardized mean difference effect size
-#' @param c_vector vector of multipliers for beta vector
-#' @param sigma the true within-case variance
-#' @param tau the true between-case variance
-#' @param tol absolute difference between true and estimated delta required for convergence
-#' @param slope_baseline linear trend during baseline subphase
-#' @param slope_treatment linear trend during treatment subphase
-#'
-#' @export 
-#' 
-#' @return list containing an estimated beta vector and loss values obtained during convergence
-
-beta_given_delta <- function(delta, c_vector, sigma = 1, tau = 1, tol = 10e-6, slope_baseline = 0.5, slope_treatment = 1){
-  
-  k = length(c_vector)/4
-  beta_tmp <- vector(mode = "numeric", length = 4*k)
-  var_scale <- (1/(2*k - 1))*(1/sqrt(tau^2 + sigma^2))
-  lr <- 10e-4
-
-  beta_tmp[seq(2, 4*k, by = 4)] <- slope_baseline #if parallel time trends, make slopes during treatment and baseline equal to 1
-  beta_tmp[seq(4, 4*k, by = 4)] <- slope_treatment
-  beta_tmp[seq(1, 4*k, by = 2)] <- 0
-  estimate.delta <- t(c_vector)%*%beta_tmp*var_scale
-  loss_stor <- 0.5*(delta-(estimate.delta))^2
-  itr_ctr <- 1
-
-  #run GD until beta gives a te such that estimated.delta converged to delta.
-  while(abs(delta - estimate.delta) > tol){
-    for(i in seq(1, 4*k, by = 2)){
-      beta_tmp[i] <- beta_tmp[i] - lr*c_vector[i]*var_scale*(estimate.delta-delta) #Gradient Descent step; add lr*(partial_derivative(loss) wrt beta_i)
-    }
-    estimate.delta <- t(c_vector)%*%beta_tmp*var_scale
-    loss_stor <- c(loss_stor, 0.5*(delta-(estimate.delta))^2)
-    itr_ctr <- itr_ctr+1
-  }
-
-  return(list(beta = beta_tmp, loss = loss_stor))
-}
-
-
-##----------------------------------------------------------------------------------------------------------------
 ## Estimate effect size, d, when (sigma^2 + tau^2) is estimated.
 ## (Issues with the A matrix (individual variance-related matrix) and E matrix remain)
 ## ...This is a work in progress...
+## NOTE: this function is for when phi and rho are known.
 ##----------------------------------------------------------------------------------------------------------------
 
-estimate_effect_size <- function(data, k){
+estimate_effect_size <- function(data, k, rho, phi){
 
   #Provide initial check of quality of supplied data.
   if(!all(c("case", "time", "treatment", "phase", "outcome") %in% colnames(data))) stop("Data.frame must have case, time, treatment, phase, and outcome columns.")
@@ -184,7 +135,7 @@ estimate_effect_size <- function(data, k){
   N_is <- sapply(c(1:m), FUN = function(x){sum(as.numeric(data$case == x))}) #number of observations in each case
 
   A_mat <- matrix(0, nrow = nrow(data), ncol = nrow(data)) #store all m (N_i x N_i) matrices that can be calculated from the var_i function case by case
-  B_mat<- matrix(0, nrow = m, ncol = nrow(data))#store all m (4k x 1) beta vectors per case
+  B_mat<- matrix(0, nrow = 4*k*m, ncol = nrow(data))#store all m (4k x 1) beta vectors per case
   Sigma_mat <- matrix(0, nrow = nrow(data), ncol = nrow(data)) 
   E_mat <- matrix(0, nrow = nrow(data), ncol = nrow(data)) #store all m (N_i x N_i) matrices per case
 
@@ -198,12 +149,12 @@ estimate_effect_size <- function(data, k){
     trt_vec <- data[data$case == i, 'treatment']
     y_i <- data[data$case == i, "outcome"]
     times <- data[data$case == i, "time"]
-    # sigma <- AR1_matrix(phi, rho, times) #what to do because we don't know rho? Need to make function to estimate phi.
-    X<- design_matrix_ABk(trt_vec, k = k)
+    sigma <- AR1_matrix(phi, rho, times) # This is the case where we do know rho and phi.
+    X <- design_matrix_ABk(trt_vec, k = k)
     c_vec <- c_vector(trt_vec, k)
 
-    A_mat[start:stop, start:stop] <- var_i(X, y_i, sigma, k)
-    B_mat[i, start:stop] <- beta_vector(X, y_i, sigma)
+    A_mat[start:stop, start:stop] <- var_i(X, y_i, sigma, k) #clean next three lines up (get rid of functions?) to just compute precision once.
+    B_mat[start:stop,] <- solve(t(X)%*%solve(sigma)%*%X)%*%t(X)%*%solve(sigma)
     E_mat[start:stop, start:stop] <- t(c_vec)%*%sigma%*%c_vec%*%A_mat_list[[i]]
   }
 

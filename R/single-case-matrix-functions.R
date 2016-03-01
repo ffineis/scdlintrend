@@ -1,95 +1,6 @@
-### Functions supporting linear algebra to calculate d and g, biased and unbiased (respectively) estimates for delta, the effect size. ###
-
-##-----------------------------------------------------------------------------------------------
-## Calculate x_i's, 1 <= x_i <= 2k-1, the mid points of each sub-phase after the first baseline
-##-----------------------------------------------------------------------------------------------
-
-#' @title gather_midpoints
-#'
-#' @description from vector of time observation points, determine midpoint of each baseline or treatment subphase
-#' @param trt_vec character vector indicating sub-phase of a particular case, e.g.
-#		        c("BASELINE", "BASELINE", "TREATMENT", "TREATMENT")
-#' @param k number of complete baseline, treatment subphases
-#' @param treatment_name string contained in simulated data's 'treatment' column
-#'
-#' @export
-#' 
-#' @return vector of time midpoints of subphases
-
-gather_midpoints <- function(trt_vec, k, treatment_name = "TREATMENT"){
-	time <- seq(length(trt_vec))
-	trt_numeric <- ifelse(trt_vec == treatment_name, 1, 0)
-
-	diff_trt_numeric <- diff(trt_numeric)
-	begin_trt_inds <- which(diff_trt_numeric == 1) + 1 #first instances when treatment introduced
-	end_trt_inds <- c(which(diff_trt_numeric == -1), length(trt_vec)) #last instantces of treatment subphases
-
-	#check
-	if(length(begin_trt_inds) != length(end_trt_inds)) stop("begin_trt_inds needs to be the same length as end_trt_inds!")
-
-	midpoints <- vector(mode = "numeric", length = (2*k - 1))
-	treatment_ctr <- 1
-
-	for(ii in 1:(2*k -1)){ #iterate over sub-phases
-		if(ii %% 2 == 1){ #in a treatment sub-phase
-			midpoints[ii] <- mean(begin_trt_inds[treatment_ctr]:end_trt_inds[treatment_ctr])
-		}
-		else{ #in a baseline sub-phase
-			midpoints[ii] <- mean((end_trt_inds[treatment_ctr]+1):(begin_trt_inds[treatment_ctr+1]-1))
-			treatment_ctr <- treatment_ctr + 1
-		}
-	}
-	return(midpoints)
-}
-
-
-##----------------------------------------------------------------------------------------------------------------
-## Create $\vec{c}$ vector required for calculating $\bar{T} = B\vec{y}$, the vector of treatment effect estimates
-##----------------------------------------------------------------------------------------------------------------
-
-#' @title c_vector
-#' 
-#' @description construct c vector containing multipliers and midpoints for multiplying with beta matrix.
-#'				user should make one of these per case.
-#' 
-#' @param trt_vec character vector indicating sub-phase of a particular case, e.g.
-#'					c("BASELINE", "BASELINE", "TREATMENT", "TREATMENT")
-#' @param k number of complete sub-phase cycles, as in (AB)^k
-#' @param x_is (2k-1)x1 vector of times at which we evaluate the treatment effect, perhaps subphase introduction times or midpoints of subphases.
-#' @param treatment_name string indicating name of the treatment sub-phase as recorded in df.
-#'
-#' @export 
-#' 
-#' @return vector of -1's, 1's, and midpoints
-#' 
-#' @examples
-#' c_1 <- c_vector(sim_df[sim_df$case == 1, "treatment"], k = 2)
-
-c_vector <- function(trt_vec, k, x_is = NULL, treatment_name = "TREATMENT"){
-
-	c_vec <- vector(mode = "numeric", length = 4*k) #storage
-
-	if(is.null(x_is)){
-		x_is <- gather_midpoints(trt_vec, k, treatment_name) #midpoints beginning with first treatment sub-phase
-	} else{
-		if (length(x_is) != 2*k) stop("x_is needs to have 4k values.")
-	}
-
-	x_i_ctr <- 1
-
-	c_vec[1] <- -1; c_vec[2] <- -x_is[x_i_ctr] #not sure about x_is indexing? Can i's get indexed along with j in the paper?
-
-	for (j in seq(1, (2*k-2))){
-		c_vec[(2*j + 1)] <- 2*((-1)**(j+1))
-		c_vec[(2*j + 2)] <- (x_is[x_i_ctr] + x_is[x_i_ctr+1])*((-1)**(j+1))
-		x_i_ctr <- x_i_ctr + 1
-	}
-
-	c_vec[(length(c_vec)-1)] <- 1
-	c_vec[length(c_vec)] <- x_is[length(x_is)]
-
-	return(c_vec)
-}
+#######################################################################################################################
+### Functions supporting linear algebra operations to calculate the treatment effect in the single-individual study ###
+#######################################################################################################################
 
 
 ##----------------------------------------------------------------------------------------------------------------
@@ -222,7 +133,7 @@ var_i <- function(X, y, Sigma, k){
 ## Obtain average treatment effect of case i
 ##----------------------------------------------------------------------------------------------------------------
 
-#' @title T_bar
+#' @title T_bar_individual
 #' 
 #' @description calculate the mean treatment effect for an individual case
 #' 
@@ -234,12 +145,9 @@ var_i <- function(X, y, Sigma, k){
 #' 
 #' @return the average T estimate for one case
 
-T_bar <- function(beta, c_i, k){
+T_bar_individual <- function(beta, c_i, k){
 	t(c_i)%*%beta/(2*k - 1) #note, paper could be missing 2*k - 1 denominator factor
 }
-
-
-
 
 
 ##################################################################################################################
@@ -247,33 +155,39 @@ T_bar <- function(beta, c_i, k){
 ##################################################################################################################
 
 # phi <- 0.4; k <- 2; rho = 0.5 
-# sim <- simulate_ABk(m = 6, n = 20, k = k, phi = phi)
-# sim_df <- sim$df
-# betas <- sim$betas
-# y_1 <- as.matrix(sim_df[sim_df$case == 1, "outcome"])
-# trt_vec <- sim_df[sim_df$case == 1, "treatment"]
-# X_1 <- design_matrix_ABk(trt_vec, k)
-# time_vec <- seq_len(length(y_1))
+# sim_df <- simulate_ABk_no_outcome(m = 6, n = 20, k = k) #all cases have identical baseline/treatment time profiles
+
+# trt_vec_1 <- sim_df[sim_df$case == 1, "treatment"] #representative of all time profiles
+# c_vec <- c_vector(trt_vec_1, k = k, x_is = gather_midpoints(trt_vec_1, k = k))
+# beta_data <- beta_given_delta(3.0, c_vec, sigma = 1, tau = 1, slope_baseline = 0.5, slope_treatment = 3)
+# beta <- beta_data$beta
+
+# sim_data <- simulate_ABk_outcomes(sim_df, beta, 2, phi = phi, sigma = 1, tau = 1)
+# case <- sim_data$df[sim_data$df$case == 1, ]
+# y_1 <- as.matrix(case$outcome)
+# trt_vec <- case$treatment
+# X_1 <- design_matrix_ABk(trt_vec_1, k)
+# time_vec <- case$time
 # sigma_1 <- AR1_matrix(phi, rho, time_vec)
-# midpoints <- gather_midpoints(trt_vec, k)
-# c_vec <- c_vector(trt_vec, k, midpoints)
 
-# beta_vec <- beta_vector(X_1, y_1, sigma_1)
+# beta_est <- beta_vector(X_1, y_1, sigma_1)
 
-# print("Estimated linear coefficients:")
-# print(t(beta_vec)) #coefficients are out of order...
-# print("Actual linear coefficients:")
-# print(betas[1, ])
-
-# intercepts <- beta_vec[1:(2*k)]; slopes <- beta_vec[((2*k)+1):(4*k)]
-# beta_vec_reorder <- vector(mode = "numeric", length = 4*k)
+# intercepts <- beta_est[1:(2*k)]; slopes <- beta_est[((2*k)+1):(4*k)]
+# beta_est_reorder <- vector(mode = "numeric", length = 4*k)
 # for(i in seq(1, 2*k)){
-# 	beta_vec_reorder[(2*i)-1] <- intercepts[i]
-# 	beta_vec_reorder[2*i] <- slopes[i]
+# 	beta_est_reorder[(2*i)-1] <- intercepts[i]
+# 	beta_est_reorder[2*i] <- slopes[i]
 # }
 
-# T_bar_incorrect <- T_bar(c_vec, beta_vec, k)
-# T_bar_correct <- T_bar(c_vec, beta_vec_reorder, k)
+# print("Estimated linear coefficients:")
+# print(t(beta_est)) #coefficients are out of order...
+# print("Actual linear coefficients:")
+# print(t(beta))
+# print("Re-ordered linear coefficients:")
+# print(beta_est_reorder)
+
+# T_bar_incorrect <- T_bar_individual(c_vec, beta_vec, k)
+# T_bar_correct <- T_bar_individual(c_vec, beta_vec_reorder, k)
 # print(sprintf("Average treatment effect: %.2f", T_bar_correct))
 
 # sigma_calcs <- var_i(X_1, y_1, sigma_1, k = 2)

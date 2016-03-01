@@ -1,8 +1,12 @@
-### First stab at simulating SCD study data ###
+######################################################################################################
+################## Simulate multi-individual study given \delta, sigma, tau, #########################
+########################### and \vec{beta} consistent with \delta  ###################################
+######################################################################################################
 
-##----------------------------------------------------------------
+
+##--------------------------------------------------------------------------------------------
 ## (Helper fun) Generate number of time observations (N_i, or N_a dep. on notation) per case
-##----------------------------------------------------------------
+##--------------------------------------------------------------------------------------------
 
 #' @title gather_Nis
 #'
@@ -10,65 +14,62 @@
 #'
 #' @param m number of cases
 #' @param max_Ni maximum number of observations across all cases
-#' @param min_Ni minimum number of observations across all cases
+#' @param min_Ni minimum number of observations across all cases.
+#'        If min_Ni == max_Ni, all cases have same number of obs.
 #'
 #' @export 
 #'
 #' @return vector of length m of lengths of observational study between min_Ni and max_Ni
-gather_Nis <- function(m, max_Ni = 12, min_Ni = 6){
+gather_Nis <- function(m, max_Ni = 12, min_Ni = 12){
   
-  if(min_Ni > max_Ni) stop("Cannot have min_Ni greater than max_Ni")
+  if(min_Ni > max_Ni) stop("Cannot have min_Ni greater than max_Ni.")
+
+  if(max_Ni == min_Ni) Nis <- rep(max_Ni, m)
   
-  possible_lengths <- c(min_Ni:max_Ni)
-  
-  Nis <- vector(length = m, mode = "numeric")
-  Nis <- sapply(Nis, FUN = function(x){tmp <- x
-                                       while(tmp == 0){
-                                         tmp <- rpois(1, max_Ni)
-                                         tmp <- ifelse(!(tmp %in% possible_lengths), 0, tmp)}
-                                       tmp
-  })
+  if(max_Ni > min_Ni){
+    possible_lengths <- c(min_Ni:max_Ni)
+    
+    Nis <- vector(length = m, mode = "numeric")
+    Nis <- sapply(Nis, FUN = function(x){tmp <- x
+                                         while(tmp == 0){
+                                           tmp <- rpois(1, max_Ni)
+                                           tmp <- ifelse(!(tmp %in% possible_lengths), 0, tmp)}
+                                         tmp
+    })
+  }
   return(Nis) 
 }
 
 
-##----------------------------------------------------------------
-## Generate AB^k data with variable number of observations per case
-##----------------------------------------------------------------
+##-------------------------------------------------------------------------------------------
+## Generate AB^k data with potentially variable number of observations per case
+##-------------------------------------------------------------------------------------------
 
-#' @title simulate_ABk
+#' @title simulate_ABk_no_outcome
 #' 
-#' @description Simulates data from an $AB^{k}$ test with linear trends in baseline and treatment sub-phases.
+#' @description Simulates data from an $AB^{k}$ test except for outcome vectors
 #' 
 #' @param m number of cases
 #' @param n maximum number of observations in a case
 #' @param k number of phases, i.e. complete AB cycles. There are 2k sub-phases.
-#' @param phi autocorrelation parameter 
 #' @param min_Ni minimum allowable number of time observations in a case.
-#' @param betas (m, 4k)-dimensional matrix containing ($\beta_{0}$, $\beta_{1}$) parameters per every sub-phase. If NULL, this has defaults.
-#' @param sigma amount of within-case residual variance
 #'   
 #' @export 
 #' 
 #' @return data.frame with case, time, treatment, phase, and outcome columns
 #' 
 #' @examples
-#' simulate_ABk(m = 6, n = 12, k = 2, phi = 0.15, tau = 1)
+#' simulate_ABk(m = 6, n = 12, k = 2)
 
-simulate_ABk <- function(m = 6, n = 12, k = 1,
-                        phi = 0.2,
-                        tau = 1,
-                        min_Ni = NULL,
-                        betas = NULL,
-                        sigma = 1){
+simulate_ABk_no_outcome <- function(m = 6, n = 12, k = 1, min_Ni = NULL){
   
-  if(is.null(min_Ni)) min_Ni <- ceiling(n/2)
+  if(is.null(min_Ni)) min_Ni <- n
   
   #investigate this...
   if((2*k - 1) >= min_Ni) stop("Too many phases given smallest number of case observations, min_Ni.")
   
   N_i <- gather_Nis(m, n, min_Ni) #gather number of obs in each case
-  tau_i <- rnorm(n = m, mean = 0, sd = tau) #individual case effects
+  # tau_i <- rnorm(n = m, mean = 0, sd = tau) #individual case effects
     
   #get m x (2k+1) matrix indicating baseline/treatment introduction times.
   introduction_time_mat <- t(sapply(N_i, FUN = function(x){floor(seq(1, x, length.out = (2*k) + 1))})) #indicate (start,end] of treatment/baseline sub-phases.
@@ -81,29 +82,23 @@ simulate_ABk <- function(m = 6, n = 12, k = 1,
   #check dimensions...
   if(!((nrow(introduction_time_mat)==m) & (ncol(introduction_time_mat) == 2*k + 1))) stop("Dimensions of baseline/treatment intro time matrix are incorrect.")
   
-  if(is.null(betas)){
-    betas <- matrix(NA, nrow = m, ncol = 4*k) #For simulation, assume that slope params are shared across baseline sub-phases, and same for treatment sub-phases
-                                              #although intercept parameters will need to be adjusted for time so that baseline/treatment sub-phases look consistent.
-    colnames(betas) <- rep(c("intercept", "slope"), times = 2*k)
-    baseline_intercept <- 40; treatment_intercept <- 10
-    baseline_slope <- 5; treatment_slope <- -10                                        
-    for(ii in 1:m){
-      betas[ii, seq(1, ncol(betas), by = 2*k)] <- (baseline_intercept+baseline_slope)-(zero_start_time[ii,seq(1,2*k, by = 2)]+1)*baseline_slope #time offset to make baseline sub-phases look consistent.
-      betas[ii, seq(2, ncol(betas), by = 2*k)] <- baseline_slope 
-      betas[ii, seq(3, ncol(betas), by = 2*k)] <- (treatment_intercept+treatment_slope)-(zero_start_time[ii,seq(1,2*k, by = 2)]+1)*treatment_slope
-      betas[ii, seq(4, ncol(betas), by = 2*k)] <- treatment_slope
-    }
-  }
+  # if(is.null(beta_vec)){
+  #   baseline_intercept <- 40; treatment_intercept <- 10
+  #   baseline_slope <- 5; treatment_slope <- -10    
+  # } else{
+  #   baseline_intercept <- beta_vec[1]; treatment_intercept <- beta_vec[3]
+  #   baseline_slope <- beta_vec[2]; treatment_slope <- beta_vec[4] 
+  # }
+                                    
+  # for(ii in 1:m){
+  #   betas[ii, seq(1, ncol(betas), by = 2*k)] <- (baseline_intercept+baseline_slope)-(zero_start_time[ii,seq(1,2*k, by = 2)]+1)*baseline_slope #time offset to make baseline sub-phases look consistent.
+  #   betas[ii, seq(2, ncol(betas), by = 2*k)] <- baseline_slope 
+  #   betas[ii, seq(3, ncol(betas), by = 2*k)] <- (treatment_intercept+treatment_slope)-(zero_start_time[ii,seq(1,2*k, by = 2)]+1)*treatment_slope
+  #   betas[ii, seq(4, ncol(betas), by = 2*k)] <- treatment_slope
+  # }
 
-  sigmas <- rep(sigma, m) #gather inter-case residual variances
-  
-  #check to see beta matrix is completely filled out...
-  if(any(is.na(betas))) stop("Beta matrix was not filled appropriately, NA values remain.")
-  
-  #fill out timeseries data with AR(1) process data + linear trends according to beta matrix.
-  simulation_df <- data.frame(matrix(0, nrow = sum(N_i), ncol = 5))
-  eij <- list()
-  colnames(simulation_df) <- c("case", "time", "treatment", "phase", "outcome")
+  simulation_df <- data.frame(matrix(0, nrow = sum(N_i), ncol = 4))
+  colnames(simulation_df) <- c("case", "time", "treatment", "phase")
   
   #fill in simulation_df.
   for(case in 1:m){
@@ -137,32 +132,210 @@ simulate_ABk <- function(m = 6, n = 12, k = 1,
         phase <- phase + 1
       }
     }
-    
-    #add in intercept based on sub-phase
-    intercept_vec <- NULL
-    agg_time_in_subphase <- aggregate(simulation_df[simulation_df$case==case,"outcome"], by = list(simulation_df[simulation_df$case==case,"treatment"], simulation_df[simulation_df$case==case,"phase"]), function(x) length(x))$x
-    beta_col_selector <- seq(1, 4*k, by = 2)
-    for(jj in 1:(2*k)){
-        intercept_vec <- as.numeric(c(intercept_vec, rep(betas[case, beta_col_selector[jj]],agg_time_in_subphase[jj])))
-    }
-
-    #add in time trend based on sub-phase
-    slope_vec <- as.numeric(ifelse(simulation_df[simulation_df$case==case,"treatment"] == "BASELINE", betas[case,seq(2, 4*k, by = 4)], betas[case,seq(4, 4*k, by = 4)]))
-    # time_trend <- slope_vec * normalized_time
-    time_trend <- slope_vec*simulation_df[simulation_df$case==case,"time"]
-    
-    #First-order auto-regressive process with time trend: 
-    # x1 = arima.sim(list(ar=.4), n=100) + 1:100 #-1<ar<1 controls how fast autocorrelation dies
-    eij[[case]] <- arima.sim(list(ar=phi), n=N_i[case], sd = sigmas[case])
-    simulation_df$outcome[start:end] <- as.numeric(eij[[case]] + time_trend + intercept_vec + tau_i[m])
   }
 
   simulation_df$phase <- as.factor(simulation_df$phase)
   simulation_df$case <- as.factor(simulation_df$case)
 
-  return(list(df = simulation_df, eij = eij, betas = betas, N_i = N_i, tau_i = tau_i))
+  return(simulation_df)
 }
 
+
+##-----------------------------------------------------------------------------------------------
+## Calculate x_i's, 1 <= i <= 2k-1, the mid points of each sub-phase after the first baseline
+##-----------------------------------------------------------------------------------------------
+
+#' @title gather_midpoints
+#'
+#' @description from vector of time observation points, determine midpoint of each baseline or treatment subphase
+#' @param trt_vec character vector indicating sub-phase of a particular case, e.g.
+#           c("BASELINE", "BASELINE", "TREATMENT", "TREATMENT")
+#' @param k number of complete baseline, treatment subphases
+#' @param treatment_name string contained in simulated data's 'treatment' column
+#'
+#' @export
+#' 
+#' @return vector of time midpoints of subphases
+
+gather_midpoints <- function(trt_vec, k, treatment_name = "TREATMENT"){
+  time <- seq(length(trt_vec))
+  trt_numeric <- ifelse(trt_vec == treatment_name, 1, 0)
+
+  diff_trt_numeric <- diff(trt_numeric)
+  begin_trt_inds <- which(diff_trt_numeric == 1) + 1 #first instances when treatment introduced
+  end_trt_inds <- c(which(diff_trt_numeric == -1), length(trt_vec)) #last instantces of treatment subphases
+
+  #check
+  if(length(begin_trt_inds) != length(end_trt_inds)) stop("begin_trt_inds needs to be the same length as end_trt_inds!")
+
+  midpoints <- vector(mode = "numeric", length = (2*k - 1))
+  treatment_ctr <- 1
+
+  for(ii in 1:(2*k -1)){ #iterate over sub-phases
+    if(ii %% 2 == 1){ #in a treatment sub-phase
+      midpoints[ii] <- mean(begin_trt_inds[treatment_ctr]:end_trt_inds[treatment_ctr])
+    }
+    else{ #in a baseline sub-phase
+      midpoints[ii] <- mean((end_trt_inds[treatment_ctr]+1):(begin_trt_inds[treatment_ctr+1]-1))
+      treatment_ctr <- treatment_ctr + 1
+    }
+  }
+  return(midpoints)
+}
+
+
+##----------------------------------------------------------------------------------------------------------------
+## Create $\vec{c}$ vector required for calculating $\bar{T} = B\vec{y}$, the vector of treatment effect estimates
+##----------------------------------------------------------------------------------------------------------------
+
+#' @title c_vector
+#' 
+#' @description construct c vector containing multipliers and midpoints for multiplying with beta matrix.
+#'        user should make one of these per case.
+#' 
+#' @param trt_vec character vector indicating sub-phase of a particular case, e.g.
+#'          c("BASELINE", "BASELINE", "TREATMENT", "TREATMENT")
+#' @param k number of complete sub-phase cycles, as in (AB)^k
+#' @param x_is (2k-1)x1 vector of times at which we evaluate the treatment effect, perhaps subphase introduction times or midpoints of subphases.
+#' @param treatment_name string indicating name of the treatment sub-phase as recorded in df.
+#'
+#' @export 
+#' 
+#' @return vector of -1's, 1's, and f(midpoints)
+#' 
+#' @examples
+#' c_1 <- c_vector(sim_df[sim_df$case == 1, "treatment"], k = 2)
+
+c_vector <- function(trt_vec, k, x_is = NULL, treatment_name = "TREATMENT"){
+
+  c_vec <- vector(mode = "numeric", length = 4*k) #storage
+
+  if(is.null(x_is)){
+    x_is <- gather_midpoints(trt_vec, k, treatment_name) #midpoints beginning with first treatment sub-phase
+  } else{
+    if (length(x_is) != (2*k -1)) stop("x_is needs to have 4k values.")
+  }
+
+  x_i_ctr <- 1
+
+  c_vec[1] <- -1; c_vec[2] <- -x_is[x_i_ctr] #not sure about x_is indexing? Can i's get indexed along with j in the paper?
+
+  for (j in seq(1, (2*k-2))){
+    c_vec[(2*j + 1)] <- 2*((-1)**(j+1))
+    c_vec[(2*j + 2)] <- (x_is[x_i_ctr] + x_is[x_i_ctr+1])*((-1)**(j+1))
+    x_i_ctr <- x_i_ctr + 1
+  }
+
+  c_vec[(length(c_vec)-1)] <- 1
+  c_vec[length(c_vec)] <- x_is[length(x_is)]
+
+  return(c_vec)
+}
+
+
+##----------------------------------------------------------------------------------------------------------------
+## Given an analytic value of the effect size (delta_{R}), known sigma and tau values, N_i,
+## find a Beta vector that yields about this effect size. Assumes that the slope coefficients are
+## constant across subphase type.
+##----------------------------------------------------------------------------------------------------------------
+
+#' @title beta_given_delta
+#' 
+#' @description derive a beta vector for an (AB)^k SCD study with desired treatment effect equal to delta. Uses
+#'              gradient descent for convergence
+#' 
+#' @param delta the standardized mean difference effect size
+#' @param c_vector vector of multipliers for beta vector
+#' @param sigma the true within-case variance
+#' @param tau the true between-case variance
+#' @param tol absolute difference between true and estimated delta required for convergence
+#' @param slope_baseline linear trend during baseline subphase
+#' @param slope_treatment linear trend during treatment subphase
+#'
+#' @export 
+#' 
+#' @return list containing an estimated beta vector and loss values obtained during convergence
+
+beta_given_delta <- function(delta, c_vec, sigma = 1, tau = 1, tol = 10e-7, slope_baseline = 0.5, slope_treatment = 1){
+  
+  k = length(c_vec)/4
+  beta_tmp <- vector(mode = "numeric", length = 4*k)
+  var_scale <- (1/(2*k - 1))*(1/sqrt(tau^2 + sigma^2))
+  lr <- 10e-4
+
+  beta_tmp[seq(2, 4*k, by = 4)] <- slope_baseline #If parallel time trends, make slopes during treatment and baseline equal to 1
+  beta_tmp[seq(4, 4*k, by = 4)] <- slope_treatment
+  beta_tmp[seq(1, 4*k, by = 2)] <- 0
+  estimate.delta <- t(c_vec)%*%beta_tmp*var_scale
+  loss_stor <- 0.5*(delta-(estimate.delta))^2
+  itr_ctr <- 1
+
+  #run GD until beta gives a te such that estimated.delta converged to delta.
+  while(abs(delta - estimate.delta) > tol){
+    for(i in seq(1, 4*k, by = 2)){
+      beta_tmp[i] <- beta_tmp[i] - lr*c_vec[i]*var_scale*(estimate.delta-delta) #Gradient Descent step; add lr*(partial_derivative(loss) wrt beta_i)
+    }
+    estimate.delta <- t(c_vec)%*%beta_tmp*var_scale
+    loss_stor <- c(loss_stor, 0.5*(delta-(estimate.delta))^2)
+    itr_ctr <- itr_ctr+1
+  }
+
+  return(list(beta = beta_tmp, loss = loss_stor))
+}
+
+
+##----------------------------------------------------------------------------------------------------------------
+## Given a data.frame outlining treatment/baseline subphases, a beta vector to be used across m individual cases, 
+## a value for the first-order autocorrelation (phi), within-case and between-case variance (sigma and tau),
+## generate outcome vectors for each individual case
+##----------------------------------------------------------------------------------------------------------------
+
+#' @title simulate_ABk_outcomes
+#' 
+#' @description generate outcome vectors for each individual case
+#' 
+#' @param df data.frame from simulate_ABk_no_outcome
+#' @param beta_vec vector of linear coefficients, shared over individuals
+#' @param k the number of complete phases
+#' @param sigma within-case variance
+#' @param tau between-case variance
+#' @param treatment_name 
+#' @param slope_treatment string indicating name of the treatment sub-phase as recorded in df
+#'
+#' @export 
+#' 
+#' @return list containing an estimated beta vector and loss values obtained during convergence
+
+simulate_ABk_outcomes <- function(df, beta_vec, k, phi = 0.2,
+                                  sigma = 1, tau = 1, treatment_name = "TREATMENT"){
+
+  if(!all(colnames(df) %in% c("case", "time", "treatment", "phase"))) stop("Column names of df are incorrect.")
+  eij <- list()
+  df$outcome <- rep(0, nrow(df))
+
+  m <- length(unique(df$case))
+  sigmas <- rep(sigma, m)
+  taus <- rnorm(m, mean = 0, sd = tau)
+
+  for(i in 1:m){
+    case <- df[df$case == i, ]
+    agg_time_in_subphase <- aggregate(1:nrow(case), by = list(case$treatment, case$phase), function(x) length(x))$x
+    
+    intercept_vec <- as.numeric(rep(beta_vec[seq(1, 4*k, by = 2)], agg_time_in_subphase))
+    slope_vec <- as.numeric(rep(beta_vec[seq(2, 4*k, by = 2)], agg_time_in_subphase))
+    time_trend <- slope_vec*case$time
+
+    eij[[i]] <- as.numeric(arima.sim(list(ar=phi), n=nrow(case), sd = sigmas[i]))
+    df[df$case == i, "outcome"] <- as.numeric(eij[[i]] + time_trend + intercept_vec + taus[i])
+  }
+
+  return(list(df = df, eij = eij, taus = taus))
+}
+
+
+######################################################################################################
+######################################## AUXILIARY FUNCTIONS #########################################
+######################################################################################################
 
 ##----------------------------------------------------------------
 ## Visualize AB^k data with linear trends
@@ -185,11 +358,10 @@ simulate_ABk <- function(m = 6, n = 12, k = 1,
 
 visualize_sim <- function(df, treatment_name = "TREATMENT"){
   m <- length(unique(df$case))
-  dt <- as.data.table(df)
   par(mfrow = c(m,1))
   par(mar = rep(1.8, 4))
   for(i in c(1:m)){
-    tmp <- dt[case == i]
+    tmp <- df[df$case == i,]
     colors <- ifelse(tmp$treatment == treatment_name, 'red', 'blue')
     plot(1:nrow(tmp), tmp$outcome, pch = 16, col = colors,
          ylab = sprintf("case %d", i),
@@ -224,16 +396,20 @@ visualize_case_acf <- function(df, case = 1){
 }
 
 
-##----------------------------------------------------------------
-## TEST SIMULATION FUNCS
-##----------------------------------------------------------------
-# sim <- simulate_AB(m = 6, n = 20, k = 2,
-#                    phi = 0.2,
-#                    tau = 1,
-#                    min_Ni = NULL,
-#                    betas = NULL)
-# par.original <- par()
-# visualize_sim(sim$df)
-# par(par.original)
-# visualize_case_acf(sim$df)
+######################################################################################################
+####################################### TEST SIMULATION FUNCS ########################################
+######################################################################################################
+
+# sim_df <- simulate_ABk_no_outcome(m = 6, n = 20, k = 2) #all cases have identical baseline/treatment time profiles
+
+# trt_vec_1 <- sim_df[sim_df$case == 1, "treatment"] #representative of all time profiles
+# c_vec <- c_vector(trt_vec_1, k = 2, x_is = gather_midpoints(trt_vec_1, k = 2))
+# beta_data <- beta_given_delta(3.0, c_vec, sigma = 1, tau = 1, slope_baseline = 0.5, slope_treatment = 3)
+# beta <- beta_data$beta
+
+# sim_data <- simulate_ABk_outcomes(sim_df, beta, 2, phi = 0.2, sigma = 1, tau = 1)
+# visualize_sim(sim_data$df)
+
+
+
 
