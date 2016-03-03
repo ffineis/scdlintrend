@@ -43,25 +43,34 @@ gather_Nis <- function(m, max_Ni = 12, min_Ni = 12){
 
 ##-------------------------------------------------------------------------------------------
 ## Generate AB^k data with potentially variable number of observations per case
+## User has option to generate outcome data or not.
 ##-------------------------------------------------------------------------------------------
 
-#' @title simulate_ABk_no_outcome
+#' @title simulate_ABk
 #' 
-#' @description Simulates data from an $AB^{k}$ test except for outcome vectors
+#' @description Simulates data from an $AB^{k}$ study; user has option to simulate obvervational data
+#'              when a matrix of beta coefficients has been supplied.
 #' 
 #' @param m number of cases
 #' @param n maximum number of observations in a case
 #' @param k number of phases, i.e. complete AB cycles. There are 2k sub-phases.
 #' @param min_Ni minimum allowable number of time observations in a case.
+#' @param outcome Boolean, does user want simulated outcome data?
+#' @param beta_matrix m x 4k matrix with linear beta coefficients
+#' @param phi the autocorrelation coefficient
+#' @param sigma within-case variance
+#' @param tau between-case variance
 #'   
 #' @export 
 #' 
 #' @return data.frame with case, time, treatment, phase, and outcome columns
 #' 
 #' @examples
-#' simulate_ABk(m = 6, n = 12, k = 2)
+#' sim_df <- simulate_ABk(m = 6, n = 12, k = 2)
 
-simulate_ABk_no_outcome <- function(m = 6, n = 12, k = 1, min_Ni = NULL){
+simulate_ABk <- function(m = 6, n = 12, k = 1, min_Ni = NULL,
+                         outcome = FALSE, beta_matrix = NULL,
+                         phi = 0.2, sigma = 1, tau = 1){
   
   if(is.null(min_Ni)) min_Ni <- n
   
@@ -81,25 +90,20 @@ simulate_ABk_no_outcome <- function(m = 6, n = 12, k = 1, min_Ni = NULL){
   
   #check dimensions...
   if(!((nrow(introduction_time_mat)==m) & (ncol(introduction_time_mat) == 2*k + 1))) stop("Dimensions of baseline/treatment intro time matrix are incorrect.")
-  
-  # if(is.null(beta_vec)){
-  #   baseline_intercept <- 40; treatment_intercept <- 10
-  #   baseline_slope <- 5; treatment_slope <- -10    
-  # } else{
-  #   baseline_intercept <- beta_vec[1]; treatment_intercept <- beta_vec[3]
-  #   baseline_slope <- beta_vec[2]; treatment_slope <- beta_vec[4] 
-  # }
-                                    
-  # for(ii in 1:m){
-  #   betas[ii, seq(1, ncol(betas), by = 2*k)] <- (baseline_intercept+baseline_slope)-(zero_start_time[ii,seq(1,2*k, by = 2)]+1)*baseline_slope #time offset to make baseline sub-phases look consistent.
-  #   betas[ii, seq(2, ncol(betas), by = 2*k)] <- baseline_slope 
-  #   betas[ii, seq(3, ncol(betas), by = 2*k)] <- (treatment_intercept+treatment_slope)-(zero_start_time[ii,seq(1,2*k, by = 2)]+1)*treatment_slope
-  #   betas[ii, seq(4, ncol(betas), by = 2*k)] <- treatment_slope
-  # }
 
+  #storage under !outcome
   simulation_df <- data.frame(matrix(0, nrow = sum(N_i), ncol = 4))
   colnames(simulation_df) <- c("case", "time", "treatment", "phase")
-  
+
+  #storage under outcome == T
+  if((outcome) & !(is.null(beta_matrix))){
+    if(!all(dim(beta_matrix) == c(m, 4*k))) stop("Dimensions of beta_matrix should be mx4k.")
+    sigmas <- rep(sigma, m)
+    taus <- rnorm(m, mean = 0, sd = tau)
+    simulation_df$outcome <- rep(0, nrow(simulation_df))
+    proceed_with_outcomes <- TRUE
+  }
+
   #fill in simulation_df.
   for(case in 1:m){
     
@@ -131,6 +135,19 @@ simulate_ABk_no_outcome <- function(m = 6, n = 12, k = 1, min_Ni = NULL){
       if((ii+1) == phase_matrix[case, phase]){ #increase the phase, k (i.e. AB^k) count.
         phase <- phase + 1
       }
+    }
+
+    #If user wants the outcome and beta_matrix is correct, simulate outcome data.
+    if(proceed_with_outcomes){
+      tmp <- simulation_df[simulation_df$case == case, ]
+      agg_time_in_subphase <- aggregate(1:nrow(tmp), by = list(tmp$treatment, tmp$phase), function(x) length(x))$x
+      
+      intercept_vec <- as.numeric(rep(beta_matrix[case, seq(1, 4*k, by = 2)], agg_time_in_subphase))
+      slope_vec <- as.numeric(rep(beta_matrix[case, seq(2, 4*k, by = 2)], agg_time_in_subphase))
+      time_trend <- slope_vec*tmp$time
+
+      err <- as.numeric(arima.sim(list(ar=phi), n=nrow(tmp), sd = sigmas[case]))
+      simulation_df$outcome[start:end] <- as.numeric(err + time_trend + intercept_vec + taus[case])
     }
   }
 
@@ -185,7 +202,7 @@ gather_midpoints <- function(trt_vec, k, treatment_name = "TREATMENT"){
 
 
 ##----------------------------------------------------------------------------------------------------------------
-## Create $\vec{c}$ vector required for calculating $\bar{T} = B\vec{y}$, the vector of treatment effect estimates
+## Create c vector required for calculating T = t(c)Beta, the average treatment effect for an individual
 ##----------------------------------------------------------------------------------------------------------------
 
 #' @title c_vector
@@ -329,7 +346,7 @@ simulate_ABk_outcomes <- function(df, beta_vec, k, phi = 0.2,
     df[df$case == i, "outcome"] <- as.numeric(eij[[i]] + time_trend + intercept_vec + taus[i])
   }
 
-  return(list(df = df, eij = eij, taus = taus))
+  return(df)
 }
 
 
@@ -400,15 +417,21 @@ visualize_case_acf <- function(df, case = 1){
 ####################################### TEST SIMULATION FUNCS ########################################
 ######################################################################################################
 
-# sim_df <- simulate_ABk_no_outcome(m = 6, n = 20, k = 2) #all cases have identical baseline/treatment time profiles
+## Instance where all cases have identical baseline/treatment time profiles
+# sim_data <- simulate_ABk_no_outcome(m = 6, n = 20, k = 2) #no outcome data.
 
-# trt_vec_1 <- sim_df[sim_df$case == 1, "treatment"] #representative of all time profiles
+# trt_vec_1 <- sim_data[sim_data$case == 1, "treatment"] #representative of all time profiles
 # c_vec <- c_vector(trt_vec_1, k = 2, x_is = gather_midpoints(trt_vec_1, k = 2))
 # beta_data <- beta_given_delta(3.0, c_vec, sigma = 1, tau = 1, slope_baseline = 0.5, slope_treatment = 3)
 # beta <- beta_data$beta
 
-# sim_data <- simulate_ABk_outcomes(sim_df, beta, 2, phi = 0.2, sigma = 1, tau = 1)
-# visualize_sim(sim_data$df)
+# sim_data <- simulate_ABk_outcomes(sim_data, beta, 2, phi = 0.2, sigma = 1, tau = 1) #append outcome data.
+# visualize_sim(sim_data)
+
+## Other instance: cases do not have identical baseline/treatment time profiles
+# beta_matrix <- matrix(rep(c(1:8), 3), byrow = T, nrow = 3)
+# sim_data <- simulate_ABk(m = 3, n = 20, k = 2, min_Ni = 10, outcome = T, beta_matrix = beta_matrix)
+# visualize_sim(sim_data[sim_data$case == 1, ])
 
 
 

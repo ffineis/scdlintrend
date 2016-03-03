@@ -4,14 +4,15 @@
 \alias{gather_Nis}
 \title{gather_Nis}
 \usage{
-gather_Nis(m, max_Ni = 12, min_Ni = 6)
+gather_Nis(m, max_Ni = 12, min_Ni = 12)
 }
 \arguments{
 \item{m}{number of cases}
 
 \item{max_Ni}{maximum number of observations across all cases}
 
-\item{min_Ni}{minimum number of observations across all cases}
+\item{min_Ni}{minimum number of observations across all cases.
+If min_Ni == max_Ni, all cases have same number of obs.}
 }
 \value{
 vector of length m of lengths of observational study between min_Ni and max_Ni

@@ -4,8 +4,8 @@
 \alias{simulate_ABk}
 \title{simulate_ABk}
 \usage{
-simulate_ABk(m = 6, n = 12, k = 1, phi = 0.2, tau = 1,
-  min_Ni = NULL, betas = NULL, sigma = 1)
+simulate_ABk(m = 6, n = 12, k = 1, min_Ni = NULL, outcome = FALSE,
+  beta_matrix = NULL, phi = 0.2, sigma = 1, tau = 1)
 }
 \arguments{
 \item{m}{number of cases}
@@ -14,21 +14,26 @@ simulate_ABk(m = 6, n = 12, k = 1, phi = 0.2, tau = 1,
 
 \item{k}{number of phases, i.e. complete AB cycles. There are 2k sub-phases.}
 
-\item{phi}{autocorrelation parameter}
-
 \item{min_Ni}{minimum allowable number of time observations in a case.}
 
-\item{betas}{(m, 4k)-dimensional matrix containing ($\beta_{0}$, $\beta_{1}$) parameters per every sub-phase. If NULL, this has defaults.}
+\item{outcome}{Boolean, does user want simulated outcome data?}
 
-\item{sigma}{amount of within-case residual variance}
+\item{beta_matrix}{m x 4k matrix with linear beta coefficients}
+
+\item{phi}{the autocorrelation coefficient}
+
+\item{sigma}{within-case variance}
+
+\item{tau}{between-case variance}
 }
 \value{
 data.frame with case, time, treatment, phase, and outcome columns
 }
 \description{
-Simulates data from an $AB^{k}$ test with linear trends in baseline and treatment sub-phases.
+Simulates data from an $AB^{k}$ study; user has option to simulate obvervational data
+             when a matrix of beta coefficients has been supplied.
 }
 \examples{
-simulate_ABk(m = 6, n = 12, k = 2, phi = 0.15, tau = 1)
+sim_df <- simulate_ABk(m = 6, n = 12, k = 2)
 }
 
